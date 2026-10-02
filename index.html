@@ -7,10 +7,8 @@
     <!-- Custom Feather Favicon (SVG base64 encoded for instant visual compatibility) -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23C9A96E'%3E%3Cpath d='M21 2c-3.87 0-7.16 2.44-8.48 5.86L6.11 14.3a1 1 0 0 0-.08.15l-3 9a1 1 0 0 0 1.27 1.27l9-3a1 1 0 0 0 .15-.08l6.44-6.41C20.24 13.9 22 10.15 22 6V3a1 1 0 0 0-1-1zm-3.56 12.56L11 18.12V15a1 1 0 0 0-1-1H6.88l1.43-4.3 10.13-10.13c1.37.52 2.57 1.45 3.39 2.65L17.44 14.56z'/%3E%3C/svg%3E">
     
-   <!-- Favicon & PWA Icons -->
-<link rel="icon" type="image/png" href="icon.png">
-<link rel="apple-touch-icon" href="icon.png">
-
+    <!-- PWA Setup -->
+    <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22%D8%B1%D9%88%D8%A3%D9%87%20%7C%20%D8%A7%D9%84%D8%B9%D9%82%D9%84%20%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%8I%20%D9%84%D9%84%D9%83%D8%A7%D8%AA%D8%A8%20%D8%A7%D9%84%D9%85%D8%AD%D8%AA%D8%B1%D9%81%22%2C%22short_name%22%3A%22%D8%B1%D9%88%D8%A3%D9%87%22%2C%22description%22%3A%22%D8%AA%D8%B7%D8%A8%D9%8A%D9%82%20%D9%85%D8%AA%D9%83%D8%A7%D9%85%D9%84%20%D9%84%D5%A5%D8%AF%D8%A7%D8%B1%D8%A9%20%D9%88%D9%83%D8%AA%D8%A7%D8%A8%D8%A9%20%D8%A7%D9%84%D8%B1%D9%88%D9%8A%D8%A7%D8%AA%20%D9%88%D8%A8%D9%86%D8%A7%D8%A1%20%D8%A7%D9%84%D9%80%20Story%20Bible%20%D8%A8%D8%A7%D9%84%D9%84%D8%BA%D8%A9%20%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230F1115%22%2C%22theme_color%22%3A%22%230F1115%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%253D%2527http%253A%252F%252Fwww.w3.org%252F2000%252Fsvg%2527%2520viewBox%253D%25270%25200%2520512%2520512%2527%253E%253Crect%2520width%253D%2527512%2527%2520height%253D%2527512%2527%2520rx%253D%2527100%2527%2520fill%253D%2527%2523181C24%2527%252F%253E%253Cpath%2520d%253D%2527M350%2520150c-30%25200-80%252050-100%2520100L150%2520350l-20%252060c-2%25206%25202%252012%25208%252014s12-1%252014-8l20-60%2520100-100c50-20%2520100-70%2520100-100v-20c0-6-6-12-12-12z%2527%2520fill%253D%2527%2523C9A96E%2527%252F%253E%253C%252Fsvg%253E%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%2C%22purpose%22%3A%22any%20maskable%22%7D%5D%7D">
     
     <!-- Google Fonts: Cairo & Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1124,7 +1122,11 @@
             if (savedData) {
                 try {
                     projects = JSON.parse(savedData);
-                    if (projects.length > 0) {
+                    const savedProjectId = localStorage.getItem('rowah_current_project_id_v1');
+                    const stillExists = savedProjectId && projects.some(p => p.id === savedProjectId);
+                    if (stillExists) {
+                        currentProjectId = savedProjectId;
+                    } else if (projects.length > 0) {
                         currentProjectId = projects[0].id;
                     }
                 } catch(e) {
@@ -1307,6 +1309,7 @@
 
         function switchProject(projId) {
             currentProjectId = projId;
+            localStorage.setItem('rowah_current_project_id_v1', projId);
             const proj = getActiveProject();
             document.getElementById('current-project-title-header').textContent = proj.title;
             if (proj.chapters && proj.chapters.length > 0) {
@@ -3929,6 +3932,7 @@ ${lawsBlock}`;
 
             projects.push(newProj);
             currentProjectId = newProj.id;
+            localStorage.setItem('rowah_current_project_id_v1', newProj.id);
             selectedChapterId = newProj.chapters[0].id;
             
             populateProjectsSelector();
