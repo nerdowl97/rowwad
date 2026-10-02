@@ -135,8 +135,8 @@
     <div class="flex h-screen overflow-hidden">
         
         <!-- Sidebar Navigation (Hidden by default on project selection / home screen) -->
-        <aside id="main-sidebar" class="w-64 bg-card border-l border-borderLg flex flex-col justify-between no-print z-20 transition-all duration-300 hidden">
-            <div>
+        <aside id="main-sidebar" class="w-64 bg-card border-l border-borderLg flex flex-col no-print z-20 transition-all duration-300 hidden">
+            <div class="flex-1 min-h-0 flex flex-col">
                 <!-- Brand Header -->
                 <div class="p-6 border-b border-borderLg flex items-center justify-between">
                     <div class="flex items-center space-x-2 space-x-reverse">
@@ -151,8 +151,8 @@
                 </div>
 
                 <!-- Projects Selector & Navigation Links -->
-                <div class="p-4">
-                    <div class="mb-4">
+                <div class="p-4 flex-1 min-h-0 flex flex-col">
+                    <div class="mb-4 flex-shrink-0">
                         <button onclick="switchView('home')" class="w-full flex items-center justify-center space-x-2 space-x-reverse bg-base hover:bg-borderLg text-gold hover:text-white py-2 px-3 rounded-lg text-xs font-semibold border border-borderLg transition-all mb-3">
                             <i class="fa-solid fa-house"></i>
                             <span>الصفحة الرئيسية للمشاريع</span>
@@ -164,7 +164,10 @@
                         </select>
                     </div>
 
-                    <nav class="space-y-1 h-[calc(100vh-19rem)] overflow-y-auto pr-1">
+                    <!-- flex-1 + min-h-0 makes this nav take exactly the remaining space and
+                         scroll internally, so the footer below (incl. the API key button) is
+                         ALWAYS fully visible regardless of nav length or screen height. -->
+                    <nav class="space-y-1 flex-1 min-h-0 overflow-y-auto pr-1">
                         <button onclick="switchView('dashboard')" id="nav-dashboard" class="w-full flex items-center space-x-3 space-x-reverse px-3 py-2 rounded-lg text-xs font-medium transition-all text-gold bg-base/50 border-r-2 border-gold">
                             <i class="fa-solid fa-chart-line w-5"></i>
                             <span>لوحة التحكم الرئيسية</span>
@@ -408,6 +411,17 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Change Log: who-changed-what-when activity history -->
+                    <div class="bg-card p-6 rounded-xl border border-borderLg">
+                        <h3 class="text-base font-bold text-lightText mb-3 flex items-center space-x-2 space-x-reverse">
+                            <i class="fa-solid fa-clock-rotate-left text-gold"></i>
+                            <span>سجل آخر التعديلات على الرواية</span>
+                        </h3>
+                        <div id="dashboard-changelog" class="max-h-56 overflow-y-auto pr-1">
+                            <!-- Populated by renderChangeLog() -->
+                        </div>
+                    </div>
                     
                     <!-- Advanced Stats Graphic -->
                     <div class="bg-card p-6 rounded-xl border border-borderLg">
@@ -616,6 +630,9 @@
                             <p class="text-xs text-gray-500">قم بسحب وإفلات بطاقات الشخصيات لتنظيم شبكة العلاقات، أو تحكم بها عبر القائمة المنظمة.</p>
                         </div>
                         <div class="flex items-center space-x-3 space-x-reverse">
+                            <button onclick="autoArrangeRelationsMap()" class="bg-base border border-borderLg hover:border-gold/50 text-gray-300 hover:text-gold font-bold text-xs px-4 py-2 rounded-lg transition-all" title="إن لم تتمكني من رؤية شخصية ما على الخريطة، استخدمي هذا الزر لإعادة ترتيب الجميع بشكل مرئي ومرتب">
+                                <i class="fa-solid fa-border-all"></i> ترتيب تلقائي لكل الشخصيات
+                            </button>
                             <button onclick="addNewRelationship()" class="bg-gold text-black font-bold text-xs px-4 py-2 rounded-lg hover:bg-gold-light transition-all">
                                 <i class="fa-solid fa-link"></i> ربط علاقة جديدة
                             </button>
@@ -632,15 +649,17 @@
                         </button>
                     </div>
 
+                    <p class="text-[11px] text-gray-500 -mt-2">💡 إذا لم تجدي بطاقة شخصية ما، مرّري لأسفل داخل الخريطة (أصبحت قابلة للتمرير الآن)، أو اضغطي "ترتيب تلقائي" لإعادة كل الشخصيات إلى العرض المرئي فوراً.</p>
+
                     <!-- Tab 1: Map visual canvas -->
-                    <div id="relations-canvas-view" class="flex-1 w-full h-[550px] bg-card/40 rounded-2xl border border-borderLg relative overflow-hidden grid-bg">
+                    <div id="relations-canvas-view" class="flex-1 w-full h-[550px] bg-card/40 rounded-2xl border border-borderLg relative overflow-auto grid-bg">
                         <!-- SVG Layer for drawing relation lines -->
                         <svg id="relations-svg-layer" class="absolute inset-0 w-full h-full pointer-events-none z-0">
                             <!-- Render dynamic lines -->
                         </svg>
 
                         <!-- Absolute placed draggable character nodes -->
-                        <div id="relations-nodes-container" class="absolute inset-0 z-10 overflow-hidden">
+                        <div id="relations-nodes-container" class="absolute inset-0 z-10">
                             <!-- Populated dynamically -->
                         </div>
                     </div>
@@ -1119,12 +1138,64 @@
             populateProjectsSelector();
             switchView('home'); 
             
-            // Auto Save loop
+            // Auto Save loop (fallback net - most saves now happen instantly via scheduleSave())
             setInterval(function() {
                 saveDataLocally();
-            }, 10000);
+            }, 5000);
+
+            // Force an immediate, synchronous save whenever the app might be closed/backgrounded,
+            // so nothing typed in the last few seconds before closing the tab is ever lost.
+            window.addEventListener('beforeunload', saveDataLocally);
+            window.addEventListener('pagehide', saveDataLocally);
+            document.addEventListener('visibilitychange', function () {
+                if (document.visibilityState === 'hidden') saveDataLocally();
+            });
 
             setupPWAInstall();
+        }
+
+        // Debounced save: called after every data edit. Collapses rapid-fire changes
+        // (typing, dragging, clicking) into a single write ~600ms after the user pauses,
+        // while still guaranteeing a save happens soon after ANY change - not just every 10s.
+        let saveDebounceTimer = null;
+        function scheduleSave() {
+            if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+            saveDebounceTimer = setTimeout(saveDataLocally, 600);
+        }
+
+        // Activity log: records a short, timestamped note of what changed and where,
+        // so the writer can see a history of edits instead of wondering what happened when.
+        function logChange(proj, message) {
+            if (!proj) return;
+            if (!proj.changeLog) proj.changeLog = [];
+            proj.changeLog.unshift({ time: new Date().toISOString(), message: message });
+            if (proj.changeLog.length > 60) proj.changeLog.length = 60;
+            scheduleSave();
+            if (activeView === 'dashboard') renderChangeLog(proj);
+        }
+
+        function formatLogTime(iso) {
+            const d = new Date(iso);
+            const now = new Date();
+            const sameDay = d.toDateString() === now.toDateString();
+            const timeStr = d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+            return sameDay ? `اليوم • ${timeStr}` : `${d.toLocaleDateString('ar-EG')} • ${timeStr}`;
+        }
+
+        function renderChangeLog(proj) {
+            const box = document.getElementById('dashboard-changelog');
+            if (!box) return;
+            const log = proj.changeLog || [];
+            if (log.length === 0) {
+                box.innerHTML = '<div class="text-xs text-gray-500 text-center py-4">لا يوجد أي تعديلات مسجلة بعد. ستظهر هنا كل إضافة أو حذف أو تعديل تقومين به.</div>';
+                return;
+            }
+            box.innerHTML = log.slice(0, 15).map(entry => `
+                <div class="flex items-start justify-between gap-3 text-xs py-1.5 border-b border-borderLg/30 last:border-0">
+                    <span class="text-gray-300">${entry.message}</span>
+                    <span class="text-gray-500 font-mono text-[10px] whitespace-nowrap">${formatLogTime(entry.time)}</span>
+                </div>
+            `).join('');
         }
 
         let deferredPrompt;
@@ -1473,6 +1544,8 @@
             } else {
                 recentContainer.innerHTML = '<div class="text-xs text-gray-500 text-center py-2">لا توجد فصول مضافة بعد.</div>';
             }
+
+            renderChangeLog(proj);
         }
 
         function renderSynopsisInputs(proj) {
@@ -1495,6 +1568,7 @@
             proj.coverImage = document.getElementById('edit-project-cover').value;
             proj.synopsis = document.getElementById('edit-project-synopsis').value;
             proj.lastUpdated = new Date().toISOString();
+            scheduleSave();
             
             document.getElementById('current-project-title-header').textContent = proj.title;
             const activeOpt = document.querySelector(`#project-selector option[value="${proj.id}"]`);
@@ -1561,6 +1635,7 @@
             if (activeCh) {
                 activeCh.title = val;
                 proj.lastUpdated = new Date().toISOString();
+            scheduleSave();
                 const opt = document.querySelector(`#editor-chapters-list .bg-gold\\/15 span`);
                 if (opt) opt.textContent = val;
             }
@@ -1579,6 +1654,7 @@
                 document.getElementById('editor-curr-chapter-pages').textContent = Math.ceil(activeCh.wordCount / 250);
                 
                 proj.lastUpdated = new Date().toISOString();
+            scheduleSave();
             }
         }
 
@@ -1588,6 +1664,7 @@
             if (activeCh) {
                 activeCh.notes = val;
                 proj.lastUpdated = new Date().toISOString();
+            scheduleSave();
             }
         }
 
@@ -1604,6 +1681,7 @@
             proj.chapters.push(newChapter);
             selectedChapterId = newId;
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تمت إضافة فصل جديد: "${newChapter.title}"`);
             renderEditor(proj);
         }
 
@@ -1612,9 +1690,12 @@
             if (!selectedChapterId) return;
             
             if (confirm("هل أنتِ متأكدة من حذف هذا الفصل نهائياً مع كافة محتوياته المكتوبة؟")) {
+                const ch = proj.chapters.find(c => c.id === selectedChapterId);
+                const chTitle = ch ? ch.title : '';
                 proj.chapters = proj.chapters.filter(ch => ch.id !== selectedChapterId);
                 selectedChapterId = proj.chapters.length > 0 ? proj.chapters[0].id : null;
                 proj.lastUpdated = new Date().toISOString();
+                logChange(proj, `تم حذف الفصل: "${chTitle}"`);
                 renderEditor(proj);
             }
         }
@@ -1675,6 +1756,28 @@
                 `;
                 grid.appendChild(card);
             });
+        }
+
+        function changeCharacterBanner(charId) {
+            const proj = getActiveProject();
+            const char = proj.characters.find(c => c.id === charId);
+            if (!char) return;
+            const url = prompt("أدخلي رابط صورة الغلاف الجديدة (اتركيه فارغاً وألغي للإبقاء على الغلاف الحالي):", char.bannerImage || '');
+            if (url === null) return; // user cancelled
+            char.bannerImage = url.trim();
+            proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تم تغيير غلاف شخصية: "${char.name}"`);
+            openCharacterProfile(charId);
+        }
+
+        function removeCharacterBanner(charId) {
+            const proj = getActiveProject();
+            const char = proj.characters.find(c => c.id === charId);
+            if (!char) return;
+            char.bannerImage = '';
+            proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تمت إزالة غلاف شخصية: "${char.name}"`);
+            openCharacterProfile(charId);
         }
 
         function openCharacterProfile(charId) {
@@ -1781,9 +1884,25 @@
             }
 
             const profileArea = document.getElementById('profile-immersive-details');
+            // Banner is now tied to the character: it uses a custom cover if the writer set
+            // one, otherwise it falls back to the character's own portrait (never a generic
+            // unrelated stock photo), and can be changed or removed at any time.
+            const hasCustomBanner = !!char.bannerImage;
+            const bannerSrc = char.bannerImage || char.image || '';
             profileArea.innerHTML = `
-                <div class="relative w-full h-64 md:h-80 rounded-2xl overflow-hidden bg-cover bg-center border border-borderLg" style="background-image: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200');">
+                <div class="relative w-full h-64 md:h-80 rounded-2xl overflow-hidden ${bannerSrc ? 'bg-cover bg-center' : 'bg-gradient-to-br from-card to-base'} border border-borderLg" ${bannerSrc ? `style="background-image: url('${bannerSrc}');"` : ''}>
                     <div class="absolute inset-0 bg-gradient-to-t from-base via-base/30 to-transparent"></div>
+
+                    <div class="absolute top-4 left-4 flex items-center space-x-2 space-x-reverse z-10">
+                        <button onclick="changeCharacterBanner('${char.id}')" class="bg-base/70 hover:bg-base text-gray-200 hover:text-gold text-[11px] px-3 py-1.5 rounded-lg backdrop-blur border border-borderLg transition-all">
+                            <i class="fa-solid fa-image ml-1"></i> ${hasCustomBanner ? 'تغيير الغلاف' : 'إضافة غلاف'}
+                        </button>
+                        ${hasCustomBanner ? `
+                        <button onclick="removeCharacterBanner('${char.id}')" class="bg-base/70 hover:bg-red-500/80 text-gray-200 hover:text-white text-[11px] px-3 py-1.5 rounded-lg backdrop-blur border border-borderLg transition-all">
+                            <i class="fa-solid fa-trash ml-1"></i> إزالة الغلاف
+                        </button>` : ''}
+                    </div>
+
                     <div class="absolute bottom-6 right-6 left-6 flex flex-col md:flex-row items-center md:items-end space-y-4 md:space-y-0 md:space-x-6 md:space-x-reverse text-right md:text-right">
                         <div class="relative group img-zoom-container" onclick="openFullscreenImage('${char.image || ''}', 'بورتريه: ${char.name}')">
                             <img src="${char.image || 'https://placehold.co/150x150/181c24/c9a96e?text=%D8%B1%D9%88%D8%A3%D8%A9'}" onerror="this.src='https://placehold.co/150x150/181c24/c9a96e?text=%D8%B1%D9%88%D9%89'" class="w-32 h-32 md:w-36 md:h-36 rounded-2xl border-4 border-card object-cover shadow-2xl transition-transform duration-300 group-hover:scale-[1.02]">
@@ -1947,11 +2066,13 @@
                 clothing: 'رداء تقليدي وبسيط',
                 notes: 'أفكار خاصة للمؤلف.',
                 image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
-                visibleRef: 'مرجع شكلي كلاسيكي'
+                visibleRef: 'مرجع شكلي كلاسيكي',
+                bannerImage: ''
             };
             if (!proj.characters) proj.characters = [];
             proj.characters.push(newChar);
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تمت إضافة شخصية جديدة: "${newChar.name}"`);
             renderCharacters(proj);
             openEditCharacterModal(newId);
         }
@@ -1982,6 +2103,10 @@
                     <div>
                         <label class="block text-gray-500 mb-1">رابط الصورة</label>
                         <input type="text" id="char-edit-image" value="${char.image || ''}" class="w-full bg-base text-lightText border border-borderLg rounded p-2 focus:outline-none">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-gray-500 mb-1">رابط صورة الغلاف الكبيرة خلف البروفايل (اتركه فارغاً لاستخدام صورة الشخصية نفسها كغلاف تلقائي)</label>
+                        <input type="text" id="char-edit-banner" value="${char.bannerImage || ''}" placeholder="اختياري - فارغ = يُستخدم بورتريه الشخصية كغلاف" class="w-full bg-base text-lightText border border-borderLg rounded p-2 focus:outline-none">
                     </div>
                     <div>
                         <label class="block text-gray-500 mb-1">العمر</label>
@@ -2108,8 +2233,11 @@
             char.clothing = document.getElementById('char-edit-clothing').value;
             char.visibleRef = document.getElementById('char-edit-visibleRef').value;
             char.notes = document.getElementById('char-edit-notes').value;
+            const bannerInput = document.getElementById('char-edit-banner');
+            if (bannerInput) char.bannerImage = bannerInput.value;
 
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تم تعديل ملف الشخصية: "${char.name}"`);
             closeEditEntityModal();
             
             if (activeView === 'character-profile') {
@@ -2121,8 +2249,11 @@
 
         function deleteCharacter(charId) {
             const proj = getActiveProject();
+            const char = proj.characters.find(c => c.id === charId);
+            const charName = char ? char.name : '';
             proj.characters = proj.characters.filter(c => c.id !== charId);
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تم حذف الشخصية: "${charName}"`);
             renderCharacters(proj);
         }
 
@@ -2162,9 +2293,14 @@
             if (!proj.relationships) proj.relationships = [];
             if (!proj.characters) proj.characters = [];
 
+            // Columns are computed from the actual visible canvas width so new character
+            // nodes always land within view instead of being pushed off to the side.
+            const canvasWidth = nodesContainer.clientWidth || 700;
+            const cols = Math.max(2, Math.floor(canvasWidth / 180));
+
             // Draw Draggable Character nodes
             proj.characters.forEach((char, idx) => {
-                let pos = char.mapPos || { x: 50 + (idx * 160) % 550, y: 100 + (Math.floor(idx / 3) * 140) };
+                let pos = char.mapPos || { x: 20 + (idx % cols) * 180, y: 20 + (Math.floor(idx / cols) * 140) };
                 char.mapPos = pos;
 
                 const node = document.createElement('div');
@@ -2234,6 +2370,19 @@
                     listTable.appendChild(row);
                 }
             });
+        }
+
+        // Recovery tool: if a character's card ever ends up out of sight (dragged off,
+        // or placed below the fold as more characters were added), this snaps every
+        // character back into a clean, fully-visible grid inside the canvas.
+        function autoArrangeRelationsMap() {
+            const proj = getActiveProject();
+            if (!proj.characters || proj.characters.length === 0) return;
+
+            proj.characters.forEach(char => { char.mapPos = null; });
+            proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تم إعادة ترتيب خريطة العلاقات تلقائياً`);
+            renderRelationships(proj);
         }
 
         function drawRelationshipLines(proj) {
@@ -2349,6 +2498,7 @@
             if (!proj.relationships) proj.relationships = [];
             proj.relationships.push(newRel);
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تمت إضافة علاقة جديدة بين شخصيتين`);
             renderRelationships(proj);
             openEditRelationshipModal(newId);
         }
@@ -2442,6 +2592,7 @@
             rel.isSecret = selectedPrivacy === 'secret';
 
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تم تعديل علاقة: "${rel.type}"`);
             closeEditEntityModal();
             renderRelationships(proj);
         }
@@ -2451,6 +2602,7 @@
             if (confirm("هل أنتِ متأكدة من حذف رابط العلاقة هذا نهائياً من سجل الرواية؟")) {
                 proj.relationships = proj.relationships.filter(r => r.id !== relId);
                 proj.lastUpdated = new Date().toISOString();
+                logChange(proj, `تم حذف رابط علاقة`);
                 closeEditEntityModal();
                 renderRelationships(proj);
             }
@@ -2573,7 +2725,7 @@
             const ev = proj.timeline.find(t => t.id === id);
             if (ev) {
                 ev.isUsed = status;
-                saveDataLocally();
+                logChange(proj, `${status ? 'تم تمييز الحدث كمستخدم' : 'تم إلغاء تمييز الحدث كمستخدم'}: "${ev.title}"`);
                 renderAllData();
             }
         }
@@ -2657,6 +2809,7 @@
             if (!proj.timeline) proj.timeline = [];
             proj.timeline.push(newEvent);
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تمت إضافة حدث زمني جديد: "${newEvent.title}"`);
             
             if (activeTimelineTab === 'visual') {
                 renderTimeline(proj);
@@ -2755,6 +2908,7 @@
             event.characterIds = checkedChars;
 
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تم تعديل الحدث الزمني: "${event.title}"`);
             closeEditEntityModal();
             
             if (activeTimelineTab === 'visual') {
@@ -2767,8 +2921,11 @@
         function deleteTimelineEvent(eventId) {
             const proj = getActiveProject();
             if (confirm("هل تريد حذف هذا الحدث الزمني نهائياً؟")) {
+                const ev = proj.timeline.find(t => t.id === eventId);
+                const evTitle = ev ? ev.title : '';
                 proj.timeline = proj.timeline.filter(t => t.id !== eventId);
                 proj.lastUpdated = new Date().toISOString();
+                logChange(proj, `تم حذف الحدث الزمني: "${evTitle}"`);
                 
                 if (activeTimelineTab === 'visual') {
                     renderTimeline(proj);
@@ -2828,6 +2985,7 @@
             if (!proj.locations) proj.locations = [];
             proj.locations.push(newLoc);
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تمت إضافة مكان جديد: "${newLoc.name}"`);
             renderLocations(proj);
             openEditLocationModal(newId);
         }
@@ -2883,6 +3041,7 @@
             loc.description = document.getElementById('loc-edit-description').value;
 
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تم تعديل بيانات المكان: "${loc.name}"`);
             closeEditEntityModal();
             renderLocations(proj);
         }
@@ -2890,8 +3049,11 @@
         function deleteLocation(locId) {
             const proj = getActiveProject();
             if (confirm("هل تريد إزالة هذا المكان نهائياً من الـ Story Bible؟")) {
+                const loc = proj.locations.find(l => l.id === locId);
+                const locName = loc ? loc.name : '';
                 proj.locations = proj.locations.filter(l => l.id !== locId);
                 proj.lastUpdated = new Date().toISOString();
+                logChange(proj, `تم حذف المكان: "${locName}"`);
                 renderLocations(proj);
             }
         }
@@ -2954,6 +3116,7 @@
             if (!proj.items) proj.items = [];
             proj.items.push(newItem);
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تمت إضافة مقتنى جديد: "${newItem.name}"`);
             renderItems(proj);
             openEditItemModal(newId);
         }
@@ -3035,6 +3198,7 @@
             item.characters = checkedChars;
 
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تم تعديل بيانات المقتنى: "${item.name}"`);
             closeEditEntityModal();
             renderItems(proj);
         }
@@ -3042,8 +3206,11 @@
         function deleteItem(itemId) {
             const proj = getActiveProject();
             if (confirm("هل تريد حذف هذا المقتنى الهام نهائياً؟")) {
+                const item = proj.items.find(i => i.id === itemId);
+                const itemName = item ? item.name : '';
                 proj.items = proj.items.filter(i => i.id !== itemId);
                 proj.lastUpdated = new Date().toISOString();
+                logChange(proj, `تم حذف المقتنى: "${itemName}"`);
                 renderItems(proj);
             }
         }
@@ -3093,6 +3260,7 @@
             if (!proj.quotes) proj.quotes = [];
             proj.quotes.push(newQuote);
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تمت إضافة اقتباس جديد`);
             renderQuotes(proj);
             openEditQuoteModal(newId);
         }
@@ -3147,6 +3315,7 @@
             quote.text = document.getElementById('quote-edit-text').value;
 
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تم تعديل اقتباس`);
             closeEditEntityModal();
             renderQuotes(proj);
         }
@@ -3156,6 +3325,7 @@
             if (confirm("هل تريد حذف هذا الاقتباس؟")) {
                 proj.quotes = proj.quotes.filter(q => q.id !== quoteId);
                 proj.lastUpdated = new Date().toISOString();
+                logChange(proj, `تم حذف اقتباس`);
                 renderQuotes(proj);
             }
         }
@@ -3210,6 +3380,7 @@
             if (!proj.worldLaws) proj.worldLaws = [];
             proj.worldLaws.push(newLaw);
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تمت إضافة قانون عالم جديد: "${newLaw.title}"`);
             renderLaws(proj);
             openEditLawModal(newId);
         }
@@ -3257,6 +3428,7 @@
             law.description = document.getElementById('law-edit-description').value;
 
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تم تعديل قانون العالم: "${law.title}"`);
             closeEditEntityModal();
             renderLaws(proj);
         }
@@ -3264,8 +3436,11 @@
         function deleteLaw(lawId) {
             const proj = getActiveProject();
             if (confirm("هل تريد إزالة هذا القانون الإبداعي؟")) {
+                const law = proj.worldLaws.find(l => l.id === lawId);
+                const lawTitle = law ? law.title : '';
                 proj.worldLaws = proj.worldLaws.filter(l => l.id !== lawId);
                 proj.lastUpdated = new Date().toISOString();
+                logChange(proj, `تم حذف قانون العالم: "${lawTitle}"`);
                 renderLaws(proj);
             }
         }
@@ -3324,14 +3499,18 @@
             if (!proj.moodBoard) proj.moodBoard = [];
             proj.moodBoard.push(newItem);
             proj.lastUpdated = new Date().toISOString();
+            logChange(proj, `تمت إضافة صورة ملهمة: "${newItem.title}"`);
             renderMoodBoard(proj);
         }
 
         function deleteMoodBoardItem(itemId) {
             const proj = getActiveProject();
             if (confirm("هل تريد حذف هذه الصورة من لوحة الإلهام؟")) {
+                const item = proj.moodBoard.find(i => i.id === itemId);
+                const itemTitle = item ? item.title : '';
                 proj.moodBoard = proj.moodBoard.filter(i => i.id !== itemId);
                 proj.lastUpdated = new Date().toISOString();
+                logChange(proj, `تم حذف صورة ملهمة: "${itemTitle}"`);
                 renderMoodBoard(proj);
             }
         }
@@ -3447,6 +3626,95 @@
             sendAICustomPrompt();
         }
 
+        // Builds a complete, automatic snapshot of everything stored about the novel
+        // (characters, relationships, timeline events, locations, items, quotes, world
+        // laws) so the AI always has full access to the Story Bible without the writer
+        // ever needing to paste details manually. When focusCharId is given, that
+        // character's own profile and everything connected to them is placed first and
+        // expanded in full detail, for accurate persona impersonation.
+        function buildStoryBibleContext(proj, focusCharId) {
+            const chars = proj.characters || [];
+            const rels = proj.relationships || [];
+            const events = proj.timeline || [];
+            const locs = proj.locations || [];
+            const items = proj.items || [];
+            const quotes = proj.quotes || [];
+            const laws = proj.worldLaws || [];
+
+            const charName = id => { const c = chars.find(c => c.id === id); return c ? c.name : 'شخصية غير معروفة'; };
+            const locName = id => { const l = locs.find(l => l.id === id); return l ? l.name : 'مكان غير محدد'; };
+
+            const fullCharLine = c => `- ${c.name}${c.alias ? ' ("' + c.alias + '")' : ''} | العمر: ${c.age || '؟'} | الوظيفة/الدور: ${c.job || '-'} | الحالة: ${c.status || '-'}
+  الصفات: ${c.traits || '-'} | العيوب: ${c.flaws || '-'} | الأهداف: ${c.goals || '-'} | المخاوف: ${c.fears || '-'}
+  الجروح النفسية: ${c.trauma || '-'} | الأسرار: ${c.secrets || '-'} | أسلوب الكلام: ${c.speechStyle || '-'} | عادات: ${c.habits || '-'}
+  الوصف الجسدي: الطول ${c.height || '-'}، الوزن ${c.weight || '-'}، العينين ${c.eyes || '-'}، الشعر ${c.hair || '-'}، البشرة ${c.skin || '-'}، الملابس المعتادة ${c.clothing || '-'}
+  ملاحظات الكاتب عن الشخصية: ${c.notes || '-'}`;
+
+            const briefCharLine = c => `- ${c.name}${c.alias ? ' ("' + c.alias + '")' : ''}: الدور ${c.job || '-'}، الصفات ${c.traits || '-'}، الجروح النفسية ${c.trauma || '-'}، الهدف ${c.goals || '-'}`;
+
+            let charactersBlock;
+            if (focusCharId) {
+                const focusChar = chars.find(c => c.id === focusCharId);
+                const others = chars.filter(c => c.id !== focusCharId);
+                charactersBlock = (focusChar ? `== ملفك الشخصي الكامل (أنت) ==\n${fullCharLine(focusChar)}\n\n` : '') +
+                    `== باقي شخصيات الرواية (للمعرفة فقط، لا تتقمصيهم) ==\n` +
+                    (others.length ? others.map(briefCharLine).join('\n') : 'لا توجد شخصيات أخرى.');
+            } else {
+                charactersBlock = chars.length ? chars.map(fullCharLine).join('\n\n') : 'لم تتم إضافة شخصيات بعد.';
+            }
+
+            const relsBlock = rels.length
+                ? rels.map(r => `- ${charName(r.from)} ← [${r.type || 'علاقة'}] → ${charName(r.to)}${r.description ? ' | ' + r.description : ''}`).join('\n')
+                : 'لا توجد علاقات مسجلة بعد.';
+
+            const eventsBlock = events.length
+                ? events.map(e => `- "${e.title}" (${e.date || 'تاريخ غير محدد'}، نوعه: ${e.type || '-'}، المكان: ${locName(e.locationId)}، الحالة: ${e.isUsed ? 'مستخدم في النص' : 'لم يُكتب بعد'})
+  الأطراف: ${(e.characterIds || []).map(charName).join('، ') || '-'}
+  التفاصيل: ${e.description || '-'}`).join('\n')
+                : 'لا توجد أحداث زمنية مسجلة بعد.';
+
+            const locsBlock = locs.length
+                ? locs.map(l => `- ${l.name}: ${l.description || '-'}`).join('\n')
+                : 'لا توجد أماكن مسجلة بعد.';
+
+            const itemsBlock = items.length
+                ? items.map(i => `- ${i.name} (${i.type || '-'})، الحالة: ${i.status || '-'}، مرتبط بـ: ${(i.characters || []).map(charName).join('، ') || '-'} | ${i.description || '-'}`).join('\n')
+                : 'لا توجد مقتنيات مسجلة بعد.';
+
+            const quotesBlock = quotes.length
+                ? quotes.map(q => `- ${charName(q.characterId)}: "${q.text}"`).join('\n')
+                : 'لا توجد اقتباسات مسجلة بعد.';
+
+            const lawsBlock = laws.length
+                ? laws.map(l => `- ${l.title}: ${l.description || '-'}`).join('\n')
+                : 'لا توجد قوانين عالم مسجلة بعد.';
+
+            return `== هوية الرواية ==
+العنوان: ${proj.title || '-'} | النوع: ${proj.genre || '-'} | الحالة: ${proj.status || '-'}
+الملخص: ${proj.synopsis || '-'}
+
+== الشخصيات ==
+${charactersBlock}
+
+== شبكة العلاقات ==
+${relsBlock}
+
+== الأحداث الزمنية (الخط الزمني للحبكة) ==
+${eventsBlock}
+
+== الأماكن ==
+${locsBlock}
+
+== المقتنيات والأغراض المهمة ==
+${itemsBlock}
+
+== اقتباسات مسجلة ==
+${quotesBlock}
+
+== قوانين وأنظمة العالم ==
+${lawsBlock}`;
+        }
+
         function handleAIPressEnter(event) {
             if (event.key === 'Enter') {
                 sendAICustomPrompt();
@@ -3493,48 +3761,39 @@
             try {
                 const activeProj = getActiveProject();
                 
-                // Build instructions for Gemini depending on general or selected character persona (Roleplay logic)
+                // Build instructions for Gemini depending on general or selected character persona (Roleplay logic).
+                // In both modes the AI is given full, automatic access to everything saved about
+                // the novel (characters, relationships, events, locations, items, quotes, world
+                // laws) - the writer never needs to paste any of this manually.
                 let systemPrompt = '';
-                let characterContext = '';
+                const storyBible = buildStoryBibleContext(activeProj, personaValue === 'general' ? null : personaValue);
 
                 if (personaValue === 'general') {
                     systemPrompt = `أنت مساعد الكتابة الإبداعية والروائية الأذكى "رواة". مهمتك مساعدة الكاتب في تنظيم روايته الحالية بعنوان "${activeProj.title}" من النوع "${activeProj.genre}".
-                    ملخص الرواية الحالي هو: "${activeProj.synopsis}".
+                    لديك وصول كامل وتلقائي إلى كل عناصر الـ Story Bible الخاصة بالرواية (الشخصيات، العلاقات، الأحداث الزمنية، الأماكن، المقتنيات، الاقتباسات، قوانين العالم) المرفقة أسفل هذه التعليمات - استخدمها دائماً في إجاباتك ولا تطلبي من الكاتب إعادة ذكرها.
                     المتطلبات الأساسية للذكاء الاصطناعي:
                     1. لا تعدل أو تصحح أسلوب الكاتب الأدبي بل تكيف معه بشكل مرن وجذاب.
-                    2. لا تكتب الرواية بدلاً من الكاتب، بل قدم اقتراحات ومسارات حبكة فرعية وعصفاً ذهنياً مفاجئاً ومثيراً للاهتمام.
-                    3. تجنب الكليشيهات المكررة في الفانتازيا وقدم توترات نفسية عميقة تتناسب مع الشخصيات.
-                    4. أجب باللغة العربية الفصحى الفاخرة بطريقة تلهم حماسة الأدباء.`;
-                    
-                    if (activeProj.characters) {
-                        characterContext = activeProj.characters.map(c => `شخصية: ${c.name} (${c.alias})، دورها: ${c.job}، صفاتها: ${c.traits}، جروحها النفسية: ${c.trauma}.`).join('\n');
-                    }
+                    2. لا تكتب الرواية بدلاً من الكاتب، بل قدم اقتراحات ومسارات حبكة فرعية وعصفاً ذهنياً مفاجئاً ومثيراً للاهتمام، مبنية على الشخصيات والأحداث الفعلية المسجلة في الرواية.
+                    3. تجنب الكليشيهات المكررة في الفانتازيا وقدم توترات نفسية عميقة تتناسب مع الشخصيات الحقيقية بالرواية.
+                    4. عند سؤالك عن شخصية أو حدث بعينه، استخرجي المعلومة مباشرة من الـ Story Bible أدناه بدقة، ولا تخترعي تفاصيل تتعارض معها.
+                    5. أجب باللغة العربية الفصحى الفاخرة بطريقة تلهم حماسة الأدباء.`;
                 } else {
                     // Fetch chosen character
                     const char = activeProj.characters.find(c => c.id === personaValue);
                     if (char) {
                         systemPrompt = `أنت الآن تتقمص بالكامل دور شخصية سردية تسمى "${char.name}" (لقبها: ${char.alias || 'بدون لقب'}) من رواية "${activeProj.title}"!
-                        بياناتك الشخصية وسلوكياتك المخزنة في الـ Story Bible هي كالتالي:
-                        - عمرك: ${char.age || 'غير معروف'}
-                        - وظيفتك ودورك بالحبكة: ${char.job || 'غير معروف'}
-                        - صفاتك ومميزاتك: ${char.traits || 'عادية'}
-                        - عيوبك ونقاط ضعفك: ${char.flaws || 'مخفية'}
-                        - جروحك النفسية وصدمات الماضي: ${char.trauma || 'غامضة'}
-                        - أسرارك: ${char.secrets || 'لا يوجد'}
-                        - أسلوب كلامك ونبرتك المميزة: ${char.speechStyle || 'بسيط وهادئ'}
-                        - عباراتك المفضلة: ${char.quotes ? char.quotes.join('، ') : 'غير محدد'}
+                        ملفك الشخصي الكامل، وكل علاقاتك وأحداثك الزمنية واقتباساتك ومقتنياتك مرفقة أسفل هذه التعليمات في الـ Story Bible - اعتمدي عليها حصرياً لمعرفة تاريخك وعلاقاتك وما مررت به.
 
                         القوانين والتعليمات الصارمة أثناء التقمص والتحاور مع الكاتب:
-                        1. تحدث بلسان الشخصية مباشرة مستخدماً ضمير المتكلم (أنا)، وبأسلوب كلامها ونبرتها المميزة [${char.speechStyle}].
-                        2. تصرف وتجاوب مع الأسئلة بناءً على عواطف الشخصية، مميزاتها، عيوبها، مخاوفها ومصالحها الشخصية فقط.
-                        3. لا تعترف أبداً بأنك نموذج ذكاء اصطناعي، بل عش الدور تماماً كأنك كائن حي يعيش داخل عالم الرواية.
-                        4. كن صريحاً في التعبير عن مخاوفك وصراعاتك مع الخصوم إذا سألك الكاتب عنها.`;
-                        
-                        characterContext = `ملخص حبكة القصة المساعد: ${activeProj.synopsis || 'غير حدد'}`;
+                        1. تحدث بلسان الشخصية مباشرة مستخدماً ضمير المتكلم (أنا)، وبأسلوب كلامها ونبرتها المميزة المذكور في ملفك.
+                        2. تصرف وتجاوب مع الأسئلة بناءً على عواطف الشخصية، مميزاتها، عيوبها، مخاوفها، أسرارها ومصالحها الشخصية فقط كما هي مسجلة في ملفك أدناه.
+                        3. إذا سُئلت عن شخصية أخرى أو حدث ما، أجيبي بما تعرفه شخصيتك عنه فعلاً بناءً على العلاقات والأحداث المسجلة في الـ Story Bible، ولا تخترعي معلومات تخالفها.
+                        4. لا تعترف أبداً بأنك نموذج ذكاء اصطناعي، بل عيشي الدور تماماً كأنك كائن حي يعيش داخل عالم الرواية.
+                        5. كوني صريحة في التعبير عن مخاوفك وصراعاتك مع الخصوم إذا سألك الكاتب عنها.`;
                     }
                 }
 
-                const fullPrompt = `المرجع وعناصر القصة المتاحة:\n${characterContext}\n\nسؤال الكاتب أو الحديث الموجه:\n${userPrompt}`;
+                const fullPrompt = `== الـ Story Bible الكاملة للرواية (مرجعك الوحيد والكامل) ==\n${storyBible}\n\n== سؤال الكاتب أو الحديث الموجه ==\n${userPrompt}`;
 
                 // Fetch call to Gemini API using flash-preview
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${localGeminiKey}`;
