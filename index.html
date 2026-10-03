@@ -4,11 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>رواة | العقل الثاني للكاتب المحترف</title>
-    <!-- Custom Feather Favicon (SVG base64 encoded for instant visual compatibility) -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23C9A96E'%3E%3Cpath d='M21 2c-3.87 0-7.16 2.44-8.48 5.86L6.11 14.3a1 1 0 0 0-.08.15l-3 9a1 1 0 0 0 1.27 1.27l9-3a1 1 0 0 0 .15-.08l6.44-6.41C20.24 13.9 22 10.15 22 6V3a1 1 0 0 0-1-1zm-3.56 12.56L11 18.12V15a1 1 0 0 0-1-1H6.88l1.43-4.3 10.13-10.13c1.37.52 2.57 1.45 3.39 2.65L17.44 14.56z'/%3E%3C/svg%3E">
+    <!-- App icons & manifest: these point to the REAL files sitting next to index.html on
+         GitHub (manifest.json + icon.png). They must all be uploaded together in the same
+         folder for any of this to work. -->
+    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="shortcut icon" type="image/png" href="icon.png">
+
+    <!-- iOS ignores manifest.json for icons entirely - it ONLY reads this tag. -->
+    <link rel="apple-touch-icon" href="icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="رواة">
+
+    <meta name="theme-color" content="#0F1115">
     
     <!-- PWA Setup -->
-    <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22%D8%B1%D9%88%D8%A3%D9%87%20%7C%20%D8%A7%D9%84%D8%B9%D9%82%D9%84%20%D8%A7%D9%84%D8%AB%D8%A7%D9%86%D9%8I%20%D9%84%D9%84%D9%83%D8%A7%D8%AA%D8%A8%20%D8%A7%D9%84%D9%85%D8%AD%D8%AA%D8%B1%D9%81%22%2C%22short_name%22%3A%22%D8%B1%D9%88%D8%A3%D9%87%22%2C%22description%22%3A%22%D8%AA%D8%B7%D8%A8%D9%8A%D9%82%20%D9%85%D8%AA%D9%83%D8%A7%D9%85%D9%84%20%D9%84%D5%A5%D8%AF%D8%A7%D8%B1%D8%A9%20%D9%88%D9%83%D8%AA%D8%A7%D8%A8%D8%A9%20%D8%A7%D9%84%D8%B1%D9%88%D9%8A%D8%A7%D8%AA%20%D9%88%D8%A8%D9%86%D8%A7%D8%A1%20%D8%A7%D9%84%D9%80%20Story%20Bible%20%D8%A8%D8%A7%D9%84%D9%84%D8%BA%D8%A9%20%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230F1115%22%2C%22theme_color%22%3A%22%230F1115%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%253D%2527http%253A%252F%252Fwww.w3.org%252F2000%252Fsvg%2527%2520viewBox%253D%25270%25200%2520512%2520512%2527%253E%253Crect%2520width%253D%2527512%2527%2520height%253D%2527512%2527%2520rx%253D%2527100%2527%2520fill%253D%2527%2523181C24%2527%252F%253E%253Cpath%2520d%253D%2527M350%2520150c-30%25200-80%252050-100%2520100L150%2520350l-20%252060c-2%25206%25202%252012%25208%252014s12-1%252014-8l20-60%2520100-100c50-20%2520100-70%2520100-100v-20c0-6-6-12-12-12z%2527%2520fill%253D%2527%2523C9A96E%2527%252F%253E%253C%252Fsvg%253E%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%2C%22purpose%22%3A%22any%20maskable%22%7D%5D%7D">
+    <link rel="manifest" href="manifest.json">
     
     <!-- Google Fonts: Cairo & Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -3813,8 +3824,10 @@ ${lawsBlock}`;
 
                 const fullPrompt = `== الـ Story Bible الكاملة للرواية (مرجعك الوحيد والكامل) ==\n${storyBible}\n\n== سؤال الكاتب أو الحديث الموجه ==\n${userPrompt}`;
 
-                // Fetch call to Gemini API using flash-preview
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${localGeminiKey}`;
+                // Fetch call to Gemini API - using the stable, widely-available "gemini-2.5-flash"
+                // model (every valid API key can reach it, unlike preview models which can
+                // require separate allowlisting and were silently failing before).
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${localGeminiKey}`;
                 const payload = {
                     contents: [{ parts: [{ text: fullPrompt }] }],
                     systemInstruction: { parts: [{ text: systemPrompt }] }
@@ -3829,14 +3842,25 @@ ${lawsBlock}`;
                 const result = await response.json();
                 chatHistory.removeChild(loadingBubble);
 
+                // IMPORTANT: Google returns HTTP error codes (400/403/404/429...) with a
+                // { error: { message, status } } body on failure. Previously this was never
+                // checked, so the REAL reason (invalid key, no access, quota, etc.) was hidden
+                // behind one generic message. Now we surface it directly so it can be fixed.
+                if (!response.ok) {
+                    const apiErrMsg = result?.error?.message || `خطأ HTTP ${response.status}`;
+                    throw new Error(apiErrMsg);
+                }
+
                 const aiText = result.candidates?.[0]?.content?.parts?.[0]?.text;
                 if (aiText) {
                     const aiBubble = document.createElement('div');
                     aiBubble.className = "bg-card p-4 rounded-lg border border-borderLg text-sm text-gray-200 leading-relaxed whitespace-pre-wrap";
                     aiBubble.innerHTML = aiText;
                     chatHistory.appendChild(aiBubble);
+                } else if (result?.promptFeedback?.blockReason) {
+                    throw new Error(`تم حظر الاستجابة بسبب: ${result.promptFeedback.blockReason}`);
                 } else {
-                    throw new Error("تنسيق استجابة غير متوقع.");
+                    throw new Error("تنسيق استجابة غير متوقع من الخادم.");
                 }
 
             } catch (error) {
@@ -3846,7 +3870,7 @@ ${lawsBlock}`;
                 }
                 const errorBubble = document.createElement('div');
                 errorBubble.className = "bg-red-500/10 border border-red-500/20 p-3 rounded-lg text-sm text-red-400";
-                errorBubble.textContent = "حدث خطأ أثناء محاولة الاتصال بـ Gemini API. يرجى التأكد من صحة مفتاح الـ API والاتصال بالشبكة.";
+                errorBubble.innerHTML = `<strong>تعذّر الاتصال بـ Gemini API:</strong><br><span class="font-mono text-[11px] block mt-1 opacity-90">${(error.message || 'خطأ غير معروف').replace(/</g, '&lt;')}</span><br><span class="text-[11px] text-red-300/80 block mt-1">تأكدي من أن المفتاح صحيح ومنسوخ بالكامل من Google AI Studio، وأنه مفعّل لاستخدام Gemini API.</span>`;
                 chatHistory.appendChild(errorBubble);
             } finally {
                 sendBtn.disabled = false;
