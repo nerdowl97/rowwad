@@ -939,6 +939,31 @@
         </div>
     </div>
 
+    <!-- New Project Modal (replaces the old native Chrome prompt() popups) -->
+    <div id="modal-new-project" class="hidden fixed inset-0 bg-base/80 backdrop-blur flex items-center justify-center z-50 p-4">
+        <div class="bg-card border border-borderLg rounded-2xl w-full max-w-lg p-6 space-y-6">
+            <div class="flex justify-between items-center border-b border-borderLg pb-3">
+                <h3 class="text-lg font-bold text-gold">رواية جديدة</h3>
+                <button onclick="closeNewProjectModal()" class="text-gray-400 hover:text-lightText text-xl">&times;</button>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs text-gray-400 mb-2">عنوان الرواية</label>
+                    <input type="text" id="new-project-title" placeholder="مثال: عرش الرماد الغابر" class="w-full bg-base text-lightText border border-borderLg rounded-lg p-3 text-sm focus:outline-none focus:border-gold" onkeydown="if(event.key==='Enter') submitNewProject();">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-400 mb-2">نوع الرواية</label>
+                    <input type="text" id="new-project-genre" placeholder="مثال: فانتازيا ملحمية" class="w-full bg-base text-lightText border border-borderLg rounded-lg p-3 text-sm focus:outline-none focus:border-gold" onkeydown="if(event.key==='Enter') submitNewProject();">
+                </div>
+
+                <button onclick="submitNewProject()" class="w-full bg-gold text-black font-bold text-sm py-2.5 rounded-lg hover:bg-gold-light transition-all">
+                    إنشاء الرواية
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Fullscreen Image Viewer Modal (Displays clear images without cropping) -->
     <div id="modal-image-viewer" class="hidden fixed inset-0 bg-black/95 backdrop-blur-md flex flex-col items-center justify-center z-50 p-4">
         <div class="absolute top-4 right-4 flex items-center space-x-4 space-x-reverse z-10">
@@ -1499,7 +1524,8 @@
                     renderProjectsHub();
                     alert("تم استيراد مشروع الرواية المختار وإضافته للرئيسية بنجاح!");
                 } catch(err) {
-                    alert("تنسيق الملف المستورد غير صحيح، يرجى اختيار ملف مشروع .json متوافق.");
+                    console.error("خطأ أثناء استيراد مشروع:", err);
+                    alert("تنسيق الملف المستورد غير صحيح: " + (err.message || 'الملف تالف أو غير مكتمل') + "\n\nجرّبي تصدّري نسخة احتياطية جديدة وتستوردي الملف الجديد.");
                 }
             };
             reader.readAsText(file);
@@ -3824,10 +3850,10 @@ ${lawsBlock}`;
 
                 const fullPrompt = `== الـ Story Bible الكاملة للرواية (مرجعك الوحيد والكامل) ==\n${storyBible}\n\n== سؤال الكاتب أو الحديث الموجه ==\n${userPrompt}`;
 
-                // Fetch call to Gemini API - using the stable, widely-available "gemini-2.5-flash"
-                // model (every valid API key can reach it, unlike preview models which can
-                // require separate allowlisting and were silently failing before).
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${localGeminiKey}`;
+                // Fetch call to Gemini API - "gemini-2.5-flash" was retired for new users
+                // (Google's own API error pointed to this replacement), so now using
+                // "gemini-3.8-flash" as instructed by Google.
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${localGeminiKey}`;
                 const payload = {
                     contents: [{ parts: [{ text: fullPrompt }] }],
                     systemInstruction: { parts: [{ text: systemPrompt }] }
@@ -3906,13 +3932,18 @@ ${lawsBlock}`;
         }
 
         function exportBackupJSON() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(projects, null, 4));
+            // Blob + object URL instead of a data: URI - data: URIs can silently fail or
+            // get truncated once the export gets a bit large (several chapters/characters),
+            // which produces a corrupted file that then fails to import. Blob has no such limit.
+            const blob = new Blob([JSON.stringify(projects, null, 4)], { type: 'application/json' });
+            const blobUrl = URL.createObjectURL(blob);
             const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `رواة_نسخة_احتياطية_${Date.now()}.json`);
+            downloadAnchor.href = blobUrl;
+            downloadAnchor.download = `رواة_نسخة_احتياطية_${Date.now()}.json`;
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
         }
 
         function importBackupJSON(event) {
@@ -3935,16 +3966,32 @@ ${lawsBlock}`;
                         alert("تنسيق الملف غير مدعوم، يرجى استيراد ملف JSON المصدر من التطبيق.");
                     }
                 } catch(err) {
-                    alert("خطأ في قراءة ملف التصدير.");
+                    console.error("خطأ أثناء استيراد النسخة الاحتياطية:", err);
+                    alert("خطأ في قراءة ملف التصدير: " + (err.message || 'الملف تالف أو غير مكتمل') + "\n\nجرّبي تصدّري نسخة احتياطية جديدة وتستوردي الملف الجديد.");
                 }
             };
             reader.readAsText(file);
         }
 
         function createNewProjectPrompt() {
-            const title = prompt("أدخل عنوان الرواية الجديدة:");
-            if (!title) return;
-            const genre = prompt("أدخل نوع الرواية:") || 'فانتازيا';
+            document.getElementById('new-project-title').value = '';
+            document.getElementById('new-project-genre').value = '';
+            document.getElementById('modal-new-project').classList.remove('hidden');
+            setTimeout(() => document.getElementById('new-project-title').focus(), 50);
+        }
+
+        function closeNewProjectModal() {
+            document.getElementById('modal-new-project').classList.add('hidden');
+        }
+
+        function submitNewProject() {
+            const title = document.getElementById('new-project-title').value.trim();
+            if (!title) {
+                document.getElementById('new-project-title').focus();
+                return;
+            }
+            const genre = document.getElementById('new-project-genre').value.trim() || 'فانتازيا';
+            closeNewProjectModal();
 
             const newProj = {
                 id: `proj-${Date.now()}`,
@@ -3971,12 +4018,10 @@ ${lawsBlock}`;
             currentProjectId = newProj.id;
             localStorage.setItem('rowah_current_project_id_v1', newProj.id);
             selectedChapterId = newProj.chapters[0].id;
-            
+
             populateProjectsSelector();
             switchView('dashboard');
-            saveDataLocally();
-            
-            alert(`مبروك! تم إنشاء مشروع "${title}" الجديد بنجاح.`);
+            logChange(newProj, `تم إنشاء هذا المشروع: "${title}"`);
         }
 
         function mockPDFPrint() {
